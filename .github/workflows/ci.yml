@@ -1,0 +1,55 @@
+name: React Native CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📦 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: 📥 Install dependencies
+        run: npm install
+
+      - name: 📥 Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 🧪 Expo Doctor (Optional)
+        run: npx expo-doctor || true
+
+      - name: 🔐 Authenticate with EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=$EXPO_TOKEN" > ~/.npmrc
+
+      - name: ⚙️ EAS Build (APK)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build --platform android --profile preview --non-interactive --json > build-result.json
+
+      - name: 🔗 Extract Download URL
+        id: extract-url
+        run: |
+          echo "APK_URL=$(cat build-result.json | jq -r '.[0].artifacts.buildUrl')" >> $GITHUB_ENV
+
+      - name: 📥 Download APK from Expo Cloud
+        run: |
+          curl -L "$APK_URL" -o app.apk
+
+      - name: 📤 Upload APK as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app.apk
